@@ -6,8 +6,33 @@ Quick validation script for skills - minimal version
 import sys
 import os
 import re
-import yaml
 from pathlib import Path
+
+def parse_simple_yaml(text):
+    """
+    Simple parser for flat YAML frontmatter.
+    Only supports top-level key: value pairs.
+    Handles quoted strings.
+    """
+    data = {}
+    lines = text.split('\n')
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+
+        parts = line.split(':', 1)
+        if len(parts) >= 2:
+            key = parts[0].strip()
+            value = parts[1].strip()
+
+            # Remove matching quotes if present
+            if (value.startswith('"') and value.endswith('"')) or \
+               (value.startswith("'") and value.endswith("'")):
+                value = value[1:-1]
+
+            data[key] = value
+    return data
 
 def validate_skill(skill_path):
     """Basic validation of a skill"""
@@ -19,7 +44,11 @@ def validate_skill(skill_path):
         return False, "SKILL.md not found"
 
     # Read and validate frontmatter
-    content = skill_md.read_text()
+    try:
+        content = skill_md.read_text(encoding='utf-8')
+    except Exception as e:
+        return False, f"Could not read SKILL.md: {e}"
+
     if not content.startswith('---'):
         return False, "No YAML frontmatter found"
 
@@ -30,13 +59,11 @@ def validate_skill(skill_path):
 
     frontmatter_text = match.group(1)
 
-    # Parse YAML frontmatter
-    try:
-        frontmatter = yaml.safe_load(frontmatter_text)
-        if not isinstance(frontmatter, dict):
-            return False, "Frontmatter must be a YAML dictionary"
-    except yaml.YAMLError as e:
-        return False, f"Invalid YAML in frontmatter: {e}"
+    # Parse YAML frontmatter using simple parser
+    frontmatter = parse_simple_yaml(frontmatter_text)
+
+    if not isinstance(frontmatter, dict):
+         return False, "Frontmatter must be a dictionary"
 
     # Define allowed properties
     ALLOWED_PROPERTIES = {'name', 'description', 'license', 'allowed-tools', 'metadata'}
